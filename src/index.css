@@ -1,0 +1,164 @@
+@import "tailwindcss";
+
+/* 便签颜色主题 */
+.note-yellow { background-color: rgba(255, 243, 176, 0.95); }
+.note-green  { background-color: rgba(200, 230, 201, 0.95); }
+.note-blue   { background-color: rgba(187, 222, 251, 0.95); }
+.note-pink   { background-color: rgba(248, 187, 208, 0.95); }
+.note-purple { background-color: rgba(225, 190, 231, 0.95); }
+.note-orange { background-color: rgba(255, 224, 178, 0.95); }
+
+/* 基础样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 禁用文本选择（便签窗口拖拽时） */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Tiptap 编辑器样式 */
+.tiptap {
+  outline: none;
+  min-height: 100px;
+}
+
+.tiptap p {
+  margin: 0.5em 0;
+}
+
+.tiptap ul,
+.tiptap ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.tiptap ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.25em;
+}
+
+.tiptap ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+.tiptap ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* 任务列表复选框样式 */
+.tiptap ul[data-type="taskList"] li > label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.tiptap ul[data-type="taskList"] li > label input[type="checkbox"]:hover {
+  border-color: #6b7280;
+}
+
+.tiptap ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+  background-color: #22c55e;
+  border-color: #22c55e;
+}
+
+.tiptap ul[data-type="taskList"] li > label input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.tiptap h1 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 0.5em 0;
+}
+
+.tiptap h2 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.5em 0;
+}
+
+.tiptap h3 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0.5em 0;
+}
+
+.tiptap mark {
+  background-color: #fef08a;
+  padding: 0.1em 0.2em;
+  border-radius: 2px;
+}
+
+.tiptap a {
+  color: #3b82f6;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+}
