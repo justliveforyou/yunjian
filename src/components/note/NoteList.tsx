@@ -1,20 +1,21 @@
-import type { Note } from '@/types';
+import type { Note, TodoItem } from '@/types';
 import { NoteCard } from './NoteCard';
 
 interface NoteListProps {
   notes: Note[];
+  todosByNote: Record<string, TodoItem[]>;
   onOpenNote?: (note: Note) => void;
   onDeleteNote?: (note: Note) => void;
   onTogglePin?: (note: Note) => void;
-  onToggleComplete?: (note: Note) => void;
+  onSetTodoStatus?: (todoId: string, noteId: string, status: import('@/types').TodoStatus) => void;
 }
 
-export function NoteList({ notes, onOpenNote, onDeleteNote, onTogglePin, onToggleComplete }: NoteListProps) {
+export function NoteList({ notes, todosByNote, onOpenNote, onDeleteNote, onTogglePin, onSetTodoStatus }: NoteListProps) {
   if (notes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-        <p className="text-lg">暂无便签</p>
-        <p className="text-sm mt-1">点击右上角 + 创建新便签</p>
+      <div className="flex flex-col items-center justify-center h-64" style={{ color: 'var(--muted-foreground)' }}>
+        <p>暂无项目</p>
+        <p className="text-sm mt-1 opacity-70">点击右上角 + 创建新项目</p>
       </div>
     );
   }
@@ -28,16 +29,17 @@ export function NoteList({ notes, onOpenNote, onDeleteNote, onTogglePin, onToggl
       {/* 置顶便签 */}
       {pinnedNotes.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium text-gray-500 mb-3">置顶</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <h2 className="text-xs font-medium mb-3 uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>置顶</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {pinnedNotes.map((note) => (
               <NoteCard
                 key={note.id}
                 note={note}
+                todos={todosByNote[note.id] || []}
                 onOpen={onOpenNote}
                 onDelete={onDeleteNote}
                 onTogglePin={onTogglePin}
-                onToggleComplete={onToggleComplete}
+                onSetTodoStatus={onSetTodoStatus}
               />
             ))}
           </div>
@@ -48,17 +50,18 @@ export function NoteList({ notes, onOpenNote, onDeleteNote, onTogglePin, onToggl
       {normalNotes.length > 0 && (
         <div>
           {pinnedNotes.length > 0 && (
-            <h2 className="text-sm font-medium text-gray-500 mb-3">其他</h2>
+            <h2 className="text-xs font-medium mb-3 uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>其他</h2>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {normalNotes.map((note) => (
               <NoteCard
                 key={note.id}
                 note={note}
+                todos={todosByNote[note.id] || []}
                 onOpen={onOpenNote}
                 onDelete={onDeleteNote}
                 onTogglePin={onTogglePin}
-                onToggleComplete={onToggleComplete}
+                onSetTodoStatus={onSetTodoStatus}
               />
             ))}
           </div>

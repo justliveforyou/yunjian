@@ -2,12 +2,14 @@ import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import type { Tag, CreateTagParams, UpdateTagParams } from '@/types';
 import { nowISO } from '@/utils';
+import * as db from '@/services/database';
 
 interface TagStore {
   tags: Tag[];
   selectedTagId: string | null;
 
   // Actions
+  loadTags: () => Promise<void>;
   setTags: (tags: Tag[]) => void;
   addTag: (params: CreateTagParams) => Tag;
   updateTag: (id: string, params: UpdateTagParams) => void;
@@ -20,6 +22,15 @@ interface TagStore {
 export const useTagStore = create<TagStore>()((set, get) => ({
   tags: [],
   selectedTagId: null,
+
+  loadTags: async () => {
+    try {
+      const tags = await db.getAllTags();
+      set({ tags });
+    } catch (err) {
+      console.error('Failed to load tags:', err);
+    }
+  },
 
   setTags: (tags) => set({ tags }),
 
@@ -36,6 +47,7 @@ export const useTagStore = create<TagStore>()((set, get) => ({
     };
 
     set((state) => ({ tags: [...state.tags, tag] }));
+    db.createTag(tag).catch((err) => console.error('Failed to create tag:', err));
     return tag;
   },
 
@@ -47,6 +59,7 @@ export const useTagStore = create<TagStore>()((set, get) => ({
           : t
       ),
     }));
+    db.updateTag(id, params).catch((err) => console.error('Failed to update tag:', err));
   },
 
   deleteTag: (id) => {
@@ -54,6 +67,7 @@ export const useTagStore = create<TagStore>()((set, get) => ({
       tags: state.tags.filter((t) => t.id !== id),
       selectedTagId: state.selectedTagId === id ? null : state.selectedTagId,
     }));
+    db.deleteTag(id).catch((err) => console.error('Failed to delete tag:', err));
   },
 
   setSelectedTag: (id) => set({ selectedTagId: id }),

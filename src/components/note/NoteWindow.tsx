@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { X, Pin, Minus, Check, Circle } from 'lucide-react';
+import { X, GripVertical, Pin, PinOff } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Editor } from '@/components/editor';
-import { cn, getNoteColorClass, nowISO } from '@/utils';
-import { getNoteById as getNoteFromDb, updateNote as updateNoteInDb } from '@/services/database';
-import type { Note } from '@/types';
+import { TodoList } from '@/components/todo';
+import { cn } from '@/utils';
+import { getNoteById as getNoteFromDb, updateNote as updateNoteInDb, getTodosByNoteId } from '@/services/database';
+import { useTodoStore } from '@/stores/todoStore';
+import type { Note, TodoItem } from '@/types';
 
 interface NoteWindowProps {
   noteId: string;
@@ -13,39 +14,40 @@ interface NoteWindowProps {
 
 export function NoteWindow({ noteId }: NoteWindowProps) {
   const [note, setNote] = useState<Note | null>(null);
+  const [todos, setTodos] = useState<TodoItem[]>([]);
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // 从数据库加载便签
+  const { addTodo, updateTodo, deleteTodo, toggleTodoStatus } = useTodoStore();
+
   useEffect(() => {
-    const loadNote = async () => {
+    const loadData = async () => {
       try {
-        const foundNote = await getNoteFromDb(noteId);
+        const [foundNote, foundTodos] = await Promise.all([
+          getNoteFromDb(noteId),
+          getTodosByNoteId(noteId),
+        ]);
         if (foundNote) {
           setNote(foundNote);
         }
+        setTodos(foundTodos);
       } catch (err) {
         console.error('Failed to load note:', err);
       } finally {
         setIsLoading(false);
       }
     };
-    loadNote();
+    loadData();
   }, [noteId]);
 
   const handleClose = async () => {
     try {
       await invoke('close_note_window', { noteId });
     } catch (e) {
-      // 如果命令失败，尝试直接关闭窗口
       const window = getCurrentWindow();
       await window.close();
     }
-  };
-
-  const handleMinimize = async () => {
-    const window = getCurrentWindow();
-    await window.minimize();
   };
 
   const handleToggleAlwaysOnTop = async () => {
@@ -59,13 +61,6 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     }
   };
 
-  const handleContentChange = async (content: string, plainText: string) => {
-    if (note) {
-      setNote({ ...note, content, plainText });
-      await updateNoteInDb(note.id, { content, plainText });
-    }
-  };
-
   const handleTitleChange = async (title: string) => {
     if (note) {
       setNote({ ...note, title });
@@ -73,42 +68,91 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     }
   };
 
-  const handleToggleComplete = async () => {
-    if (note) {
-      const newCompleted = !note.isCompleted;
-      const completedAt = newCompleted ? nowISO() : undefined;
-      setNote({ ...note, isCompleted: newCompleted, completedAt });
-      await updateNoteInDb(note.id, { isCompleted: newCompleted, completedAt });
-    }
+  const handleAddTodo = async (content: string) => {
+    const newTodo = await addTodo({ noteId, content });
+    setTodos((prev) => [...prev, newTodo]);
+  };
+
+  const handleToggleStatus = async (id: string) => {
+    await toggleTodoStatus(id, noteId);
+    setTodos((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          const statusOrder: Array<'pending' | 'in_progress' | 'completed'> = ['pending', 'in_progress', 'completed'];
+          const currentIndex = statusOrder.indexOf(t.status);
+          const nextStatus = statusOrder[(currentIndex + 1) % 3];
+          return { ...t, status: nextStatus };
+        }
+        return t;
+      })
+    );
+  };
+
+  const handleSetStatus = async (id: string, status: import('@/types').TodoStatus) => {
+    await updateTodo(id, noteId, { status });
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status } : t))
+    );
+  };
+
+  const handleDeleteTodo = async (id: string) => {
+    await deleteTodo(id, noteId);
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const handleUpdateTodo = async (id: string, content: string) => {
+    await updateTodo(id, noteId, { content });
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, content } : t))
+    );
+  };
+
+  const handleUpdateTodoColor = async (id: string, color: import('@/types').TodoColor) => {
+    await updateTodo(id, noteId, { color });
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, color } : t))
+    );
   };
 
   const handleDragStart = async (e: React.MouseEvent) => {
-    // 如果点击的是按钮，不触发拖动
     if ((e.target as HTMLElement).closest('button')) {
       return;
     }
+    setIsDragging(true);
     const window = getCurrentWindow();
     await window.startDragging();
+    setIsDragging(false);
+  };
+
+  const progress = {
+    total: todos.length,
+    completed: todos.filter((t) => t.status === 'completed').length,
+    percent: todos.length > 0
+      ? Math.round((todos.filter((t) => t.status === 'completed').length / todos.length) * 100)
+      : 0,
   };
 
   if (isLoading) {
     return (
-      <div className="h-screen flex flex-col bg-yellow-50">
-        {/* 标题栏 */}
+      <div className="h-screen flex flex-col rounded-2xl border border-border/50 bg-card/95 backdrop-blur-xl"
+        style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25), 0 12px 24px -8px rgba(0,0,0,0.15)' }}>
         <div
-          className="h-8 flex items-center justify-end px-2 border-b border-black/10 cursor-move select-none"
+          className="flex items-center justify-between px-4 py-3 border-b border-border/50 cursor-grab"
           onMouseDown={handleDragStart}
         >
+          <div className="flex items-center gap-2">
+            <GripVertical className="w-4 h-4 text-muted-foreground/40" />
+            <span className="font-semibold text-foreground">加载中...</span>
+          </div>
           <button
             onClick={handleClose}
-            className="p-1 rounded hover:bg-red-500 hover:text-white text-gray-600"
-            title="关闭"
+            className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-gray-500">加载中...</p>
+          <p className="text-muted-foreground">加载中...</p>
         </div>
       </div>
     );
@@ -116,116 +160,114 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
 
   if (!note) {
     return (
-      <div className="h-screen flex flex-col bg-gray-100">
-        {/* 标题栏 */}
+      <div className="h-screen flex flex-col rounded-2xl border border-border/50 bg-card/95 backdrop-blur-xl"
+        style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25), 0 12px 24px -8px rgba(0,0,0,0.15)' }}>
         <div
-          className="h-8 flex items-center justify-end px-2 border-b border-black/10 cursor-move select-none"
+          className="flex items-center justify-between px-4 py-3 border-b border-border/50 cursor-grab"
           onMouseDown={handleDragStart}
         >
+          <div className="flex items-center gap-2">
+            <GripVertical className="w-4 h-4 text-muted-foreground/40" />
+            <span className="font-semibold text-foreground">错误</span>
+          </div>
           <button
             onClick={handleClose}
-            className="p-1 rounded hover:bg-red-500 hover:text-white text-gray-600"
-            title="关闭"
+            className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-gray-500">便签不存在</p>
+          <p className="text-muted-foreground">便签不存在</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div
-      className={cn(
-        'h-screen flex flex-col rounded-lg overflow-hidden shadow-2xl',
-        getNoteColorClass(note.color)
-      )}
-    >
-      {/* 标题栏 - 可拖动区域 */}
+    <div className="h-screen bg-transparent">
       <div
-        className="h-8 flex items-center justify-between px-2 border-b border-black/10 cursor-move select-none"
+        className={cn(
+          'h-full flex flex-col rounded-2xl bg-card transition-all duration-200',
+          isDragging && 'scale-[1.02]'
+        )}
+      >
+      {/* 头部拖拽区域 */}
+      <div
+        className={cn(
+          'flex items-center justify-between px-4 py-3 border-b border-border/50',
+          isAlwaysOnTop ? 'cursor-default' : 'cursor-grab'
+        )}
         onMouseDown={handleDragStart}
       >
+        <div className="flex items-center gap-2">
+          <GripVertical className="w-4 h-4 text-muted-foreground/40" />
+          <input
+            type="text"
+            placeholder="项目名称"
+            value={note.title}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            className="bg-transparent font-semibold text-foreground focus:outline-none"
+          />
+        </div>
         <div className="flex items-center gap-1">
-          {/* 完成按钮 */}
-          <button
-            onClick={handleToggleComplete}
-            className={cn(
-              'p-1 rounded hover:bg-black/10 transition-colors',
-              note.isCompleted ? 'text-green-600' : 'text-gray-500'
-            )}
-            title={note.isCompleted ? '标记为未完成' : '标记为已完成'}
-          >
-            {note.isCompleted ? (
-              <Check className="w-3.5 h-3.5" />
-            ) : (
-              <Circle className="w-3.5 h-3.5" />
-            )}
-          </button>
-          {/* 置顶按钮 */}
           <button
             onClick={handleToggleAlwaysOnTop}
             className={cn(
-              'p-1 rounded hover:bg-black/10 transition-colors',
-              isAlwaysOnTop ? 'text-amber-600' : 'text-gray-500'
+              'p-1.5 rounded-lg transition-colors',
+              isAlwaysOnTop
+                ? 'bg-primary/15 text-primary'
+                : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted'
             )}
-            title={isAlwaysOnTop ? '取消置顶' : '置顶'}
+            title={isAlwaysOnTop ? '取消固定' : '固定位置'}
           >
-            <Pin className="w-3.5 h-3.5" />
+            {isAlwaysOnTop ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
           </button>
-        </div>
-
-        <div className="flex items-center gap-0.5">
-          {/* 最小化按钮 */}
-          <button
-            onClick={handleMinimize}
-            className="p-1 rounded hover:bg-black/10 text-gray-600"
-            title="最小化"
-          >
-            <Minus className="w-3.5 h-3.5" />
-          </button>
-          {/* 关闭按钮 */}
           <button
             onClick={handleClose}
-            className="p-1 rounded hover:bg-red-500 hover:text-white text-gray-600"
-            title="关闭"
+            className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* 标题输入 */}
-      <div className="px-3 py-2 border-b border-black/5">
-        <input
-          type="text"
-          placeholder="标题"
-          value={note.title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          className={cn(
-            'w-full bg-transparent text-sm font-medium focus:outline-none',
-            note.isCompleted && 'line-through text-gray-500'
-          )}
-        />
+      {/* 进度条 */}
+      <div className="px-4 py-2 border-b border-border/30">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-xs text-muted-foreground">
+            {progress.completed} / {progress.total} 已完成
+          </span>
+          <span className="text-xs font-medium text-primary">
+            {progress.percent}%
+          </span>
+        </div>
+        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-500 rounded-full"
+            style={{ width: `${progress.percent}%` }}
+          />
+        </div>
       </div>
 
-      {/* 完成状态提示 */}
-      {note.isCompleted && (
-        <div className="px-3 py-1 bg-green-50 border-b border-green-100 text-green-700 text-xs flex items-center gap-1">
-          <Check className="w-3 h-3" />
-          已完成
+        {/* 任务列表 */}
+        <div className="flex-1 overflow-y-auto scrollbar-hidden">
+          <TodoList
+            todos={todos}
+            progress={progress}
+            onAddTodo={handleAddTodo}
+            onToggleStatus={handleToggleStatus}
+            onSetStatus={handleSetStatus}
+            onDeleteTodo={handleDeleteTodo}
+            onUpdateTodo={handleUpdateTodo}
+            onUpdateTodoColor={handleUpdateTodoColor}
+          />
         </div>
-      )}
 
-      {/* 编辑器 */}
-      <div className="flex-1 overflow-hidden">
-        <Editor
-          content={note.content}
-          onChange={handleContentChange}
-        />
+        {/* 底部提示 */}
+        <div className="px-4 py-2.5 border-t border-border/30 bg-muted/30 rounded-b-2xl">
+          <p className="text-[10px] text-muted-foreground text-center">拖拽移动 · 点击图钉固定</p>
+        </div>
       </div>
     </div>
   );

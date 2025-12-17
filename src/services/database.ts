@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
-import type { Note, Tag, NoteWindow } from '@/types';
+import type { Note, Tag, NoteWindow, TodoItem, TodoStatus, TodoColor } from '@/types';
 
 let db: Database | null = null;
 
@@ -11,39 +11,46 @@ export async function initDatabase(): Promise<Database> {
 
   db = await Database.load('sqlite:notes.db');
 
-  // 执行迁移
+  // 创建 notes 表（简化版，移除富文本相关字段）
   await db.execute(`
     CREATE TABLE IF NOT EXISTS notes (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL DEFAULT '',
-      content TEXT NOT NULL DEFAULT '{}',
-      plain_text TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
       color TEXT NOT NULL DEFAULT 'yellow',
       priority TEXT NOT NULL DEFAULT 'medium',
       status TEXT NOT NULL DEFAULT 'active',
       is_pinned INTEGER NOT NULL DEFAULT 0,
       is_locked INTEGER NOT NULL DEFAULT 0,
-      is_completed INTEGER NOT NULL DEFAULT 0,
       tags TEXT NOT NULL DEFAULT '[]',
       reminder_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      deleted_at TEXT,
-      completed_at TEXT
+      deleted_at TEXT
     )
   `);
 
-  // 迁移：添加 is_completed 和 completed_at 列（如果不存在）
+  // 迁移：添加 description 列（如果不存在）
   try {
-    await db.execute('ALTER TABLE notes ADD COLUMN is_completed INTEGER NOT NULL DEFAULT 0');
+    await db.execute('ALTER TABLE notes ADD COLUMN description TEXT NOT NULL DEFAULT \'\'');
   } catch {
     // 列已存在，忽略错误
   }
-  try {
-    await db.execute('ALTER TABLE notes ADD COLUMN completed_at TEXT');
-  } catch {
-    // 列已存在，忽略错误
-  }
+
+  // 创建 todo_items 表
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS todo_items (
+      id TEXT PRIMARY KEY,
+      note_id TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      completed_at TEXT,
+      FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+    )
+  `);
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS tags (
@@ -82,9 +89,18 @@ export async function initDatabase(): Promise<Database> {
     )
   `);
 
+  // 迁移：添加 color 列到 todo_items（如果不存在）
+  try {
+    await db.execute('ALTER TABLE todo_items ADD COLUMN color TEXT NOT NULL DEFAULT \'none\'');
+  } catch {
+    // 列已存在，忽略错误
+  }
+
   // 创建索引
   await db.execute('CREATE INDEX IF NOT EXISTS idx_notes_status ON notes(status)');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_todo_items_note_id ON todo_items(note_id)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_todo_items_order ON todo_items(note_id, sort_order)');
 
   return db;
 }
@@ -104,40 +120,34 @@ export async function getDatabase(): Promise<Database> {
 interface NoteRow {
   id: string;
   title: string;
-  content: string;
-  plain_text: string;
+  description: string;
   color: string;
   priority: string;
   status: string;
   is_pinned: number;
   is_locked: number;
-  is_completed: number;
   tags: string;
   reminder_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
-  completed_at: string | null;
 }
 
 function rowToNote(row: NoteRow): Note {
   return {
     id: row.id,
     title: row.title,
-    content: row.content,
-    plainText: row.plain_text,
+    description: row.description || '',
     color: row.color as Note['color'],
     priority: row.priority as Note['priority'],
     status: row.status as Note['status'],
     isPinned: row.is_pinned === 1,
     isLocked: row.is_locked === 1,
-    isCompleted: row.is_completed === 1,
     tags: JSON.parse(row.tags || '[]'),
     reminderId: row.reminder_id ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? undefined,
-    completedAt: row.completed_at ?? undefined,
   };
 }
 
@@ -156,25 +166,22 @@ export async function getNoteById(id: string): Promise<Note | null> {
 export async function createNote(note: Note): Promise<void> {
   const database = await getDatabase();
   await database.execute(
-    `INSERT INTO notes (id, title, content, plain_text, color, priority, status, is_pinned, is_locked, is_completed, tags, reminder_id, created_at, updated_at, deleted_at, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO notes (id, title, description, color, priority, status, is_pinned, is_locked, tags, reminder_id, created_at, updated_at, deleted_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       note.id,
       note.title,
-      note.content,
-      note.plainText,
+      note.description,
       note.color,
       note.priority,
       note.status,
       note.isPinned ? 1 : 0,
       note.isLocked ? 1 : 0,
-      note.isCompleted ? 1 : 0,
       JSON.stringify(note.tags),
       note.reminderId ?? null,
       note.createdAt,
       note.updatedAt,
       note.deletedAt ?? null,
-      note.completedAt ?? null,
     ]
   );
 }
@@ -188,13 +195,9 @@ export async function updateNote(id: string, updates: Partial<Note>): Promise<vo
     fields.push('title = ?');
     values.push(updates.title);
   }
-  if (updates.content !== undefined) {
-    fields.push('content = ?');
-    values.push(updates.content);
-  }
-  if (updates.plainText !== undefined) {
-    fields.push('plain_text = ?');
-    values.push(updates.plainText);
+  if (updates.description !== undefined) {
+    fields.push('description = ?');
+    values.push(updates.description);
   }
   if (updates.color !== undefined) {
     fields.push('color = ?');
@@ -228,14 +231,6 @@ export async function updateNote(id: string, updates: Partial<Note>): Promise<vo
     fields.push('deleted_at = ?');
     values.push(updates.deletedAt);
   }
-  if (updates.isCompleted !== undefined) {
-    fields.push('is_completed = ?');
-    values.push(updates.isCompleted ? 1 : 0);
-  }
-  if (updates.completedAt !== undefined) {
-    fields.push('completed_at = ?');
-    values.push(updates.completedAt);
-  }
 
   // 总是更新 updated_at
   fields.push('updated_at = ?');
@@ -248,7 +243,122 @@ export async function updateNote(id: string, updates: Partial<Note>): Promise<vo
 
 export async function deleteNote(id: string): Promise<void> {
   const database = await getDatabase();
+  // 先删除关联的 todo_items
+  await database.execute('DELETE FROM todo_items WHERE note_id = ?', [id]);
   await database.execute('DELETE FROM notes WHERE id = ?', [id]);
+}
+
+// ==================== Todo Items ====================
+
+interface TodoItemRow {
+  id: string;
+  note_id: string;
+  content: string;
+  status: string;
+  color: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+function rowToTodoItem(row: TodoItemRow): TodoItem {
+  return {
+    id: row.id,
+    noteId: row.note_id,
+    content: row.content,
+    status: row.status as TodoStatus,
+    color: (row.color || 'none') as TodoColor,
+    order: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    completedAt: row.completed_at ?? undefined,
+  };
+}
+
+export async function getTodosByNoteId(noteId: string): Promise<TodoItem[]> {
+  const database = await getDatabase();
+  const rows = await database.select<TodoItemRow[]>(
+    'SELECT * FROM todo_items WHERE note_id = ? ORDER BY sort_order ASC',
+    [noteId]
+  );
+  return rows.map(rowToTodoItem);
+}
+
+export async function createTodoItem(todo: TodoItem): Promise<void> {
+  const database = await getDatabase();
+  await database.execute(
+    `INSERT INTO todo_items (id, note_id, content, status, color, sort_order, created_at, updated_at, completed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      todo.id,
+      todo.noteId,
+      todo.content,
+      todo.status,
+      todo.color,
+      todo.order,
+      todo.createdAt,
+      todo.updatedAt,
+      todo.completedAt ?? null,
+    ]
+  );
+}
+
+export async function updateTodoItem(id: string, updates: Partial<TodoItem>): Promise<void> {
+  const database = await getDatabase();
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.content !== undefined) {
+    fields.push('content = ?');
+    values.push(updates.content);
+  }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.color !== undefined) {
+    fields.push('color = ?');
+    values.push(updates.color);
+  }
+  if (updates.order !== undefined) {
+    fields.push('sort_order = ?');
+    values.push(updates.order);
+  }
+  if (updates.completedAt !== undefined) {
+    fields.push('completed_at = ?');
+    values.push(updates.completedAt ?? null);
+  }
+
+  fields.push('updated_at = ?');
+  values.push(new Date().toISOString());
+
+  values.push(id);
+
+  if (fields.length > 1) {
+    await database.execute(`UPDATE todo_items SET ${fields.join(', ')} WHERE id = ?`, values);
+  }
+}
+
+export async function deleteTodoItem(id: string): Promise<void> {
+  const database = await getDatabase();
+  await database.execute('DELETE FROM todo_items WHERE id = ?', [id]);
+}
+
+export async function deleteTodosByNoteId(noteId: string): Promise<void> {
+  const database = await getDatabase();
+  await database.execute('DELETE FROM todo_items WHERE note_id = ?', [noteId]);
+}
+
+export async function reorderTodoItems(noteId: string, todoIds: string[]): Promise<void> {
+  const database = await getDatabase();
+  const now = new Date().toISOString();
+  for (let i = 0; i < todoIds.length; i++) {
+    await database.execute(
+      'UPDATE todo_items SET sort_order = ?, updated_at = ? WHERE id = ? AND note_id = ?',
+      [i, now, todoIds[i], noteId]
+    );
+  }
 }
 
 // ==================== Tags ====================

@@ -1,34 +1,110 @@
 @import "tailwindcss";
 
-/* 便签颜色主题 */
-.note-yellow { background-color: rgba(255, 243, 176, 0.95); }
-.note-green  { background-color: rgba(200, 230, 201, 0.95); }
-.note-blue   { background-color: rgba(187, 222, 251, 0.95); }
-.note-pink   { background-color: rgba(248, 187, 208, 0.95); }
-.note-purple { background-color: rgba(225, 190, 231, 0.95); }
-.note-orange { background-color: rgba(255, 224, 178, 0.95); }
+@custom-variant dark (&:is(.dark *));
 
-/* 基础样式 */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+:root {
+  /* 全新配色方案 - 温暖的米色/奶油色调 */
+  --background: oklch(0.98 0.01 85);
+  --foreground: oklch(0.2 0.02 60);
+  --card: oklch(0.995 0.005 85);
+  --card-foreground: oklch(0.2 0.02 60);
+  --popover: oklch(0.995 0.005 85);
+  --popover-foreground: oklch(0.2 0.02 60);
+  --primary: oklch(0.45 0.12 160);
+  --primary-foreground: oklch(0.98 0.01 85);
+  --secondary: oklch(0.94 0.015 85);
+  --secondary-foreground: oklch(0.35 0.02 60);
+  --muted: oklch(0.95 0.01 85);
+  --muted-foreground: oklch(0.5 0.02 60);
+  --accent: oklch(0.92 0.02 85);
+  --accent-foreground: oklch(0.25 0.02 60);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.98 0.01 85);
+  --border: oklch(0.9 0.01 85);
+  --input: oklch(0.92 0.01 85);
+  --ring: oklch(0.45 0.12 160);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.97 0.008 85);
+  --sidebar-foreground: oklch(0.25 0.02 60);
+  --sidebar-accent: oklch(0.93 0.015 85);
+  --sidebar-accent-foreground: oklch(0.3 0.02 60);
+  --sidebar-border: oklch(0.91 0.01 85);
 }
 
-html, body, #root {
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+.dark {
+  --background: oklch(0.14 0.01 60);
+  --foreground: oklch(0.92 0.01 85);
+  --card: oklch(0.17 0.012 60);
+  --card-foreground: oklch(0.92 0.01 85);
+  --popover: oklch(0.17 0.012 60);
+  --popover-foreground: oklch(0.92 0.01 85);
+  --primary: oklch(0.55 0.12 160);
+  --primary-foreground: oklch(0.14 0.01 60);
+  --secondary: oklch(0.22 0.015 60);
+  --secondary-foreground: oklch(0.92 0.01 85);
+  --muted: oklch(0.22 0.015 60);
+  --muted-foreground: oklch(0.6 0.01 85);
+  --accent: oklch(0.25 0.02 60);
+  --accent-foreground: oklch(0.92 0.01 85);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.92 0.01 85);
+  --border: oklch(0.25 0.015 60);
+  --input: oklch(0.25 0.015 60);
+  --ring: oklch(0.55 0.12 160);
+  --sidebar: oklch(0.16 0.012 60);
+  --sidebar-foreground: oklch(0.92 0.01 85);
+  --sidebar-accent: oklch(0.22 0.015 60);
+  --sidebar-accent-foreground: oklch(0.92 0.01 85);
+  --sidebar-border: oklch(0.25 0.015 60);
 }
 
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme inline {
+  --font-sans: "Inter", "Inter Fallback", system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
 }
 
-/* 禁用文本选择（便签窗口拖拽时） */
-.no-select {
-  user-select: none;
-  -webkit-user-select: none;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  html, body, #root {
+    height: 100%;
+  }
 }
 
 /* 自定义滚动条 */
@@ -42,123 +118,63 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: oklch(0.7 0.01 85);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: oklch(0.6 0.01 85);
 }
 
-/* Tiptap 编辑器样式 */
-.tiptap {
-  outline: none;
-  min-height: 100px;
+/* 隐藏滚动条但保持滚动功能 */
+.scrollbar-hidden {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
-.tiptap p {
-  margin: 0.5em 0;
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
-.tiptap ul,
-.tiptap ol {
-  padding-left: 1.5em;
-  margin: 0.5em 0;
+/* 弹出窗口全局隐藏滚动条 */
+.note-window-scrollbar-hidden,
+.note-window-scrollbar-hidden * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
-.tiptap ul[data-type="taskList"] {
-  list-style: none;
-  padding-left: 0;
+.note-window-scrollbar-hidden::-webkit-scrollbar,
+.note-window-scrollbar-hidden *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
-.tiptap ul[data-type="taskList"] li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5em;
+/* 禁用文本选择 */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.tiptap ul[data-type="taskList"] li > label {
-  flex-shrink: 0;
-  margin-top: 0.25em;
-}
+/* 工具类 */
+@layer utilities {
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
 
-.tiptap ul[data-type="taskList"] li > div {
-  flex: 1;
-}
+  .dark .glass-effect {
+    background: rgba(30, 20, 40, 0.75);
+  }
 
-.tiptap ul[data-type="taskList"] li[data-checked="true"] > div {
-  text-decoration: line-through;
-  opacity: 0.6;
-}
+  .task-card-shadow {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
 
-/* 任务列表复选框样式 */
-.tiptap ul[data-type="taskList"] li > label input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid #9ca3af;
-  border-radius: 4px;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.15s ease;
-}
-
-.tiptap ul[data-type="taskList"] li > label input[type="checkbox"]:hover {
-  border-color: #6b7280;
-}
-
-.tiptap ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
-  background-color: #22c55e;
-  border-color: #22c55e;
-}
-
-.tiptap ul[data-type="taskList"] li > label input[type="checkbox"]:checked::after {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: 2px;
-  width: 5px;
-  height: 9px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-.tiptap h1 {
-  font-size: 1.5em;
-  font-weight: 600;
-  margin: 0.5em 0;
-}
-
-.tiptap h2 {
-  font-size: 1.25em;
-  font-weight: 600;
-  margin: 0.5em 0;
-}
-
-.tiptap h3 {
-  font-size: 1.1em;
-  font-weight: 600;
-  margin: 0.5em 0;
-}
-
-.tiptap mark {
-  background-color: #fef08a;
-  padding: 0.1em 0.2em;
-  border-radius: 2px;
-}
-
-.tiptap a {
-  color: #3b82f6;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.tiptap p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  float: left;
-  color: #9ca3af;
-  pointer-events: none;
-  height: 0;
+  .dark .task-card-shadow {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
 }
