@@ -98,7 +98,7 @@ export function TodoItemComponent({
 
         {/* 状态选择器弹出框 */}
         {showStatusPicker && (
-          <div className="absolute left-0 top-full mt-1 p-1 bg-popover border border-border rounded-lg shadow-lg z-20 min-w-30">
+          <div className="absolute left-0 top-full mt-1 p-1 bg-popover border border-border rounded-lg shadow-lg z-20 min-w-32 whitespace-nowrap">
             {statusOptions.map((status) => {
               const Icon = statusIcons[status];
               const isActive = todo.status === status;

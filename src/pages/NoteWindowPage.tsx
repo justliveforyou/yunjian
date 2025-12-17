@@ -9,6 +9,8 @@ export function NoteWindowPage() {
   useEffect(() => {
     document.body.style.background = 'transparent';
     document.documentElement.style.background = 'transparent';
+    document.body.style.overflow = 'visible';
+    document.documentElement.style.overflow = 'visible';
     document.body.classList.add('note-window-scrollbar-hidden');
     document.documentElement.classList.add('note-window-scrollbar-hidden');
   }, []);

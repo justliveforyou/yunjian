@@ -27,7 +27,7 @@ export const useSettingsStore = create<SettingsStore>()(
       },
     }),
     {
-      name: 'sticky-notes-settings',
+      name: 'yunjian-settings',
     }
   )
 );

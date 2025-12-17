@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "StickyNotes",
+  "productName": "云笺",
   "version": "0.1.0",
   "identifier": "com.stickynotes.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "StickyNotes",
+        "title": "云笺",
         "label": "main",
         "width": 1000,
         "height": 700,
@@ -20,7 +20,9 @@
         "minHeight": 600,
         "resizable": true,
         "fullscreen": false,
-        "center": true
+        "center": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
@@ -28,8 +30,9 @@
     },
     "macOSPrivateApi": true,
     "trayIcon": {
+      "id": "main",
       "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
+      "iconAsTemplate": false
     }
   },
   "bundle": {
@@ -43,8 +46,8 @@
       "icons/icon.ico"
     ],
     "category": "Productivity",
-    "shortDescription": "A cross-platform sticky notes application",
-    "longDescription": "StickyNotes is a beautiful and powerful sticky notes application for macOS. Create notes, organize with tags, set reminders, and pin notes to your desktop.",
+    "shortDescription": "云笺 - 跨平台便签应用",
+    "longDescription": "云笺是一款精美实用的跨平台便签应用。创建便签、标签分类、任务管理，让您的工作更高效。",
     "macOS": {
       "minimumSystemVersion": "10.15"
     }

@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
-import { X, GripVertical, Pin, PinOff } from 'lucide-react';
+import { X, GripVertical, Pin, PinOff, Palette, Circle, Plus } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { TodoList } from '@/components/todo';
+import { useSettingsStore } from '@/stores';
+import { useTodoStore } from '@/stores/todoStore';
+import { ICON_MAP, TASK_COLORS, DEFAULT_PROJECT_COLORS, DEFAULT_TODO_COLORS, DEFAULT_TODO_STATUSES } from '@/constants';
+import { ConfirmModal } from '@/components/modal';
 import { cn } from '@/utils';
 import { getNoteById as getNoteFromDb, updateNote as updateNoteInDb, getTodosByNoteId } from '@/services/database';
-import { useTodoStore } from '@/stores/todoStore';
-import type { Note, TodoItem } from '@/types';
+import type { Note, TodoItem, TodoStatus, TodoColor } from '@/types';
 
 interface NoteWindowProps {
   noteId: string;
@@ -18,8 +21,23 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [openStatusPicker, setOpenStatusPicker] = useState<string | null>(null);
+  const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
+  const [colorPickerPos, setColorPickerPos] = useState({ x: 0, y: 0 });
+  const [statusPickerPos, setStatusPickerPos] = useState({ x: 0, y: 0 });
+  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
+  const [editingTodoValue, setEditingTodoValue] = useState('');
+  const [newTodoContent, setNewTodoContent] = useState('');
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState('');
+  const [deleteTodoConfirm, setDeleteTodoConfirm] = useState<string | null>(null);
 
-  const { addTodo, updateTodo, deleteTodo, toggleTodoStatus } = useTodoStore();
+  const { addTodo, updateTodo, deleteTodo } = useTodoStore();
+  const { settings } = useSettingsStore();
+
+  const projectColors = settings.projectColors?.length ? settings.projectColors : DEFAULT_PROJECT_COLORS;
+  const todoColorsConfig = settings.todoColors?.length ? settings.todoColors : DEFAULT_TODO_COLORS;
+  const todoStatuses = settings.todoStatuses?.length ? settings.todoStatuses : DEFAULT_TODO_STATUSES;
 
   useEffect(() => {
     const loadData = async () => {
@@ -28,9 +46,7 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
           getNoteFromDb(noteId),
           getTodosByNoteId(noteId),
         ]);
-        if (foundNote) {
-          setNote(foundNote);
-        }
+        if (foundNote) setNote(foundNote);
         setTodos(foundTodos);
       } catch (err) {
         console.error('Failed to load note:', err);
@@ -41,10 +57,19 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     loadData();
   }, [noteId]);
 
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenStatusPicker(null);
+      setShowColorPicker(null);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   const handleClose = async () => {
     try {
       await invoke('close_note_window', { noteId });
-    } catch (e) {
+    } catch {
       const window = getCurrentWindow();
       await window.close();
     }
@@ -55,7 +80,7 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     setIsAlwaysOnTop(newValue);
     try {
       await invoke('set_window_always_on_top', { noteId, alwaysOnTop: newValue });
-    } catch (e) {
+    } catch {
       const window = getCurrentWindow();
       await window.setAlwaysOnTop(newValue);
     }
@@ -68,112 +93,63 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     }
   };
 
-  const handleAddTodo = async (content: string) => {
-    const newTodo = await addTodo({ noteId, content });
-    setTodos((prev) => [...prev, newTodo]);
+  const handleAddTodo = async () => {
+    if (newTodoContent.trim()) {
+      const newTodo = await addTodo({ noteId, content: newTodoContent.trim() });
+      setTodos(prev => [...prev, newTodo]);
+      setNewTodoContent('');
+    }
   };
 
-  const handleToggleStatus = async (id: string) => {
-    await toggleTodoStatus(id, noteId);
-    setTodos((prev) =>
-      prev.map((t) => {
-        if (t.id === id) {
-          const statusOrder: Array<'pending' | 'in_progress' | 'completed'> = ['pending', 'in_progress', 'completed'];
-          const currentIndex = statusOrder.indexOf(t.status);
-          const nextStatus = statusOrder[(currentIndex + 1) % 3];
-          return { ...t, status: nextStatus };
-        }
-        return t;
-      })
-    );
+  const handleUpdateTodoStatus = async (todoId: string, status: TodoStatus) => {
+    await updateTodo(todoId, noteId, { status });
+    setTodos(prev => prev.map(t => t.id === todoId ? { ...t, status } : t));
+    setOpenStatusPicker(null);
   };
 
-  const handleSetStatus = async (id: string, status: import('@/types').TodoStatus) => {
-    await updateTodo(id, noteId, { status });
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status } : t))
-    );
+  const handleUpdateTodoContent = async (todoId: string, content: string) => {
+    await updateTodo(todoId, noteId, { content });
+    setTodos(prev => prev.map(t => t.id === todoId ? { ...t, content } : t));
   };
 
-  const handleDeleteTodo = async (id: string) => {
-    await deleteTodo(id, noteId);
-    setTodos((prev) => prev.filter((t) => t.id !== id));
+  const handleUpdateTodoColor = async (todoId: string, color: TodoColor) => {
+    await updateTodo(todoId, noteId, { color });
+    setTodos(prev => prev.map(t => t.id === todoId ? { ...t, color } : t));
+    setShowColorPicker(null);
   };
 
-  const handleUpdateTodo = async (id: string, content: string) => {
-    await updateTodo(id, noteId, { content });
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, content } : t))
-    );
-  };
-
-  const handleUpdateTodoColor = async (id: string, color: import('@/types').TodoColor) => {
-    await updateTodo(id, noteId, { color });
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, color } : t))
-    );
+  const handleDeleteTodo = async (todoId: string) => {
+    await deleteTodo(todoId, noteId);
+    setTodos(prev => prev.filter(t => t.id !== todoId));
+    await emit('todo-changed', { noteId });
   };
 
   const handleDragStart = async (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button')) {
-      return;
-    }
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input')) return;
     setIsDragging(true);
     const window = getCurrentWindow();
     await window.startDragging();
     setIsDragging(false);
   };
 
-  const progress = {
-    total: todos.length,
-    completed: todos.filter((t) => t.status === 'completed').length,
-    percent: todos.length > 0
-      ? Math.round((todos.filter((t) => t.status === 'completed').length / todos.length) * 100)
-      : 0,
-  };
+  const completedCount = todos.filter(t => t.status === 'completed').length;
+  const totalCount = todos.length;
+  const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  const bgColor = note ? projectColors.find(c => c.id === note.color)?.bg || '#fefce8' : '#fefce8';
 
   if (isLoading) {
     return (
-      <div className="h-screen flex flex-col rounded-2xl border border-border/50 bg-card/95 backdrop-blur-xl"
-        style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25), 0 12px 24px -8px rgba(0,0,0,0.15)' }}>
-        <div
-          className="flex items-center justify-between px-4 py-3 border-b border-border/50 cursor-grab"
-          onMouseDown={handleDragStart}
-        >
-          <div className="flex items-center gap-2">
-            <GripVertical className="w-4 h-4 text-muted-foreground/40" />
-            <span className="font-semibold text-foreground">加载中...</span>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-muted-foreground">加载中...</p>
-        </div>
+      <div className="h-screen flex items-center justify-center bg-card rounded-2xl">
+        <p className="text-muted-foreground">加载中...</p>
       </div>
     );
   }
 
   if (!note) {
     return (
-      <div className="h-screen flex flex-col rounded-2xl border border-border/50 bg-card/95 backdrop-blur-xl"
-        style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25), 0 12px 24px -8px rgba(0,0,0,0.15)' }}>
-        <div
-          className="flex items-center justify-between px-4 py-3 border-b border-border/50 cursor-grab"
-          onMouseDown={handleDragStart}
-        >
-          <div className="flex items-center gap-2">
-            <GripVertical className="w-4 h-4 text-muted-foreground/40" />
-            <span className="font-semibold text-foreground">错误</span>
-          </div>
-          <button
-            onClick={handleClose}
-            className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
-          >
+      <div className="h-screen flex flex-col bg-card rounded-2xl">
+        <div className="flex justify-end p-2">
+          <button onClick={handleClose} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -185,90 +161,237 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
   }
 
   return (
-    <div className="h-screen bg-transparent">
+    <div className="h-screen bg-transparent overflow-visible">
       <div
-        className={cn(
-          'h-full flex flex-col rounded-2xl bg-card transition-all duration-200',
-          isDragging && 'scale-[1.02]'
-        )}
+        className={cn('h-full flex flex-col rounded-2xl transition-all duration-200 overflow-hidden', isDragging && 'scale-[1.02]')}
+        style={{ backgroundColor: bgColor }}
       >
-      {/* 头部拖拽区域 */}
-      <div
-        className={cn(
-          'flex items-center justify-between px-4 py-3 border-b border-border/50',
-          isAlwaysOnTop ? 'cursor-default' : 'cursor-grab'
-        )}
-        onMouseDown={handleDragStart}
-      >
-        <div className="flex items-center gap-2">
-          <GripVertical className="w-4 h-4 text-muted-foreground/40" />
-          <input
-            type="text"
-            placeholder="项目名称"
-            value={note.title}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            className="bg-transparent font-semibold text-foreground focus:outline-none"
-          />
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleToggleAlwaysOnTop}
-            className={cn(
-              'p-1.5 rounded-lg transition-colors',
-              isAlwaysOnTop
-                ? 'bg-primary/15 text-primary'
-                : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted'
+        {/* 头部 */}
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b border-border/30 cursor-grab"
+          onMouseDown={handleDragStart}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <GripVertical className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+            {editingTitle ? (
+              <input
+                type="text"
+                value={titleValue}
+                onChange={(e) => setTitleValue(e.target.value)}
+                onBlur={() => { if (titleValue.trim()) handleTitleChange(titleValue.trim()); setEditingTitle(false); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { if (titleValue.trim()) handleTitleChange(titleValue.trim()); setEditingTitle(false); } else if (e.key === 'Escape') setEditingTitle(false); }}
+                autoFocus
+                className="bg-transparent font-semibold text-foreground focus:outline-none flex-1 min-w-0 border-b border-primary"
+              />
+            ) : (
+              <span
+                className="font-semibold text-foreground cursor-pointer flex-1 min-w-0 truncate"
+                onDoubleClick={() => { setEditingTitle(true); setTitleValue(note.title); }}
+              >
+                {note.title || '未命名项目'}
+              </span>
             )}
-            title={isAlwaysOnTop ? '取消固定' : '固定位置'}
-          >
-            {isAlwaysOnTop ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={handleClose}
-            className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={handleToggleAlwaysOnTop}
+              className={cn(
+                'p-1.5 rounded-lg transition-colors',
+                isAlwaysOnTop ? 'bg-primary/15 text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted'
+              )}
+              title={isAlwaysOnTop ? '取消固定' : '固定位置'}
+            >
+              {isAlwaysOnTop ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={handleClose}
+              className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* 进度条 */}
-      <div className="px-4 py-2 border-b border-border/30">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs text-muted-foreground">
-            {progress.completed} / {progress.total} 已完成
-          </span>
-          <span className="text-xs font-medium text-primary">
-            {progress.percent}%
-          </span>
+        {/* 进度条 */}
+        <div className="px-4 py-2 border-b border-border/30">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">{completedCount} / {totalCount} 已完成</span>
+            {totalCount > 0 && (
+              <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+                <div className="h-full bg-primary transition-all duration-300 rounded-full" style={{ width: `${progress}%` }} />
+              </div>
+            )}
+          </div>
         </div>
-        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all duration-500 rounded-full"
-            style={{ width: `${progress.percent}%` }}
-          />
-        </div>
-      </div>
 
         {/* 任务列表 */}
-        <div className="flex-1 overflow-y-auto scrollbar-hidden">
-          <TodoList
-            todos={todos}
-            progress={progress}
-            onAddTodo={handleAddTodo}
-            onToggleStatus={handleToggleStatus}
-            onSetStatus={handleSetStatus}
-            onDeleteTodo={handleDeleteTodo}
-            onUpdateTodo={handleUpdateTodo}
-            onUpdateTodoColor={handleUpdateTodoColor}
-          />
+        <div className="flex-1 overflow-y-auto px-2 py-2 scrollbar-hidden">
+          {totalCount === 0 ? (
+            <div className="py-6 text-center">
+              <p className="text-sm text-muted-foreground">暂无任务</p>
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {todos.map((todo, index) => {
+                const statusConfig = todoStatuses.find(s => s.id === todo.status) || todoStatuses[0];
+                const StatusIcon = ICON_MAP[statusConfig.icon] || Circle;
+                const taskBgColor = TASK_COLORS[index % TASK_COLORS.length];
+                const todoColorConfig = todoColorsConfig.find(c => c.id === todo.color);
+                const hasTodoColor = todo.color && todo.color !== 'none' && todoColorConfig;
+
+                return (
+                  <div
+                    key={todo.id}
+                    className={cn('group/task flex items-center gap-2.5 px-3 py-2 rounded-lg', !hasTodoColor && taskBgColor)}
+                    style={hasTodoColor ? { backgroundColor: todoColorConfig.bg } : undefined}
+                  >
+                    {/* 状态图标 */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (openStatusPicker === todo.id) {
+                            setOpenStatusPicker(null);
+                          } else {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const windowHeight = window.innerHeight;
+                            const spaceBelow = windowHeight - rect.bottom;
+                            const y = spaceBelow < 150 ? rect.top - 120 : rect.bottom + 4;
+                            setStatusPickerPos({ x: rect.left, y });
+                            setOpenStatusPicker(todo.id);
+                          }
+                        }}
+                        className={cn('shrink-0 hover:opacity-70 transition-opacity', statusConfig.color)}
+                      >
+                        <StatusIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* 内容 */}
+                    {editingTodoId === todo.id ? (
+                      <input
+                        type="text"
+                        value={editingTodoValue}
+                        onChange={(e) => setEditingTodoValue(e.target.value)}
+                        onBlur={() => { if (editingTodoValue.trim()) handleUpdateTodoContent(todo.id, editingTodoValue.trim()); setEditingTodoId(null); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { if (editingTodoValue.trim()) handleUpdateTodoContent(todo.id, editingTodoValue.trim()); setEditingTodoId(null); } else if (e.key === 'Escape') setEditingTodoId(null); }}
+                        autoFocus
+                        className="flex-1 bg-transparent text-sm border-b border-primary focus:outline-none"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span
+                        className={cn('flex-1 text-sm cursor-pointer', todo.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground')}
+                        onDoubleClick={() => { setEditingTodoId(todo.id); setEditingTodoValue(todo.content); }}
+                      >
+                        {todo.content || '未命名任务'}
+                      </span>
+                    )}
+
+                    {/* 颜色选择 */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (showColorPicker === todo.id) {
+                            setShowColorPicker(null);
+                          } else {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const windowHeight = window.innerHeight;
+                            // 如果下方空间不足，向上弹出
+                            const spaceBelow = windowHeight - rect.bottom;
+                            const y = spaceBelow < 100 ? rect.top - 80 : rect.bottom + 4;
+                            setColorPickerPos({ x: Math.max(8, rect.right - 140), y });
+                            setShowColorPicker(todo.id);
+                          }
+                        }}
+                        className="p-1 rounded opacity-0 group-hover/task:opacity-100 hover:bg-black/10 transition-all text-muted-foreground"
+                      >
+                        <Palette className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* 删除按钮 */}
+                    <button
+                      onClick={() => setDeleteTodoConfirm(todo.id)}
+                      className="p-1 rounded opacity-0 group-hover/task:opacity-100 hover:bg-destructive/10 text-destructive transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* 底部提示 */}
-        <div className="px-4 py-2.5 border-t border-border/30 bg-muted/30 rounded-b-2xl">
-          <p className="text-[10px] text-muted-foreground text-center">拖拽移动 · 点击图钉固定</p>
+        {/* 添加任务 */}
+        <div className="px-3 py-2 border-t border-border/30">
+          <div className="flex items-center gap-2">
+            <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              placeholder="添加新任务..."
+              value={newTodoContent}
+              onChange={(e) => setNewTodoContent(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
+              className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground"
+            />
+          </div>
         </div>
       </div>
+
+      {/* 状态选择器 - fixed定位避免被裁剪 */}
+      {openStatusPicker && (
+        <div
+          className="fixed p-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-32 whitespace-nowrap"
+          style={{ left: statusPickerPos.x, top: statusPickerPos.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {todoStatuses.map((status) => {
+            const Icon = ICON_MAP[status.icon] || Circle;
+            return (
+              <button
+                key={status.id}
+                onClick={() => handleUpdateTodoStatus(openStatusPicker, status.id as TodoStatus)}
+                className={cn('w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors', 'hover:bg-muted text-foreground')}
+              >
+                <span className={status.color}><Icon className="w-4 h-4" /></span>
+                <span>{status.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 颜色选择器 - fixed定位避免被裁剪 */}
+      {showColorPicker && (
+        <div
+          className="fixed p-2 bg-popover border border-border rounded-lg shadow-lg z-50 flex flex-wrap gap-1.5 w-35"
+          style={{ left: colorPickerPos.x, top: colorPickerPos.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {todoColorsConfig.map((color) => (
+            <button
+              key={color.id}
+              onClick={() => handleUpdateTodoColor(showColorPicker, color.id as TodoColor)}
+              className={cn('w-6 h-6 rounded-full border-2 transition-all', 'border-transparent hover:scale-110')}
+              style={{ backgroundColor: color.id === 'none' ? '#e5e5e5' : color.bg }}
+            />
+          ))}
+        </div>
+      )}
+
+      {deleteTodoConfirm && (
+        <ConfirmModal
+          title="删除任务"
+          message="确定要删除这个任务吗？"
+          confirmText="删除"
+          onConfirm={() => { handleDeleteTodo(deleteTodoConfirm); setDeleteTodoConfirm(null); }}
+          onCancel={() => setDeleteTodoConfirm(null)}
+          danger
+        />
+      )}
     </div>
   );
 }

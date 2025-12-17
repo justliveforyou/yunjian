@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
 import App from './App.tsx';
 import { NoteWindowPage } from '@/pages/NoteWindowPage';
+import { CreateNotePage } from '@/pages/CreateNotePage';
 import { initDatabase } from '@/services/database';
 
 // 初始化数据库后再渲染应用
@@ -25,6 +26,7 @@ function renderApp() {
         <Routes>
           <Route path="/" element={<App />} />
           <Route path="/note/:noteId" element={<NoteWindowPage />} />
+          <Route path="/create" element={<CreateNotePage />} />
         </Routes>
       </BrowserRouter>
     </StrictMode>
