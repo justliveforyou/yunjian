@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, GripVertical, Pin, PinOff, Palette, Circle, Plus } from 'lucide-react';
+import { X, GripVertical, Pin, PinOff, Palette, Circle, Plus, Droplet } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -31,6 +31,8 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
   const [titleValue, setTitleValue] = useState('');
   const [deleteTodoConfirm, setDeleteTodoConfirm] = useState<string | null>(null);
   const [showNoteColorPicker, setShowNoteColorPicker] = useState(false);
+  const [showOpacityPicker, setShowOpacityPicker] = useState(false);
+  const [opacity, setOpacity] = useState(1);
 
   const { addTodo, updateTodo, deleteTodo } = useTodoStore();
   const { settings } = useSettingsStore();
@@ -62,6 +64,7 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
       setOpenStatusPicker(null);
       setShowColorPicker(null);
       setShowNoteColorPicker(false);
+      setShowOpacityPicker(false);
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
@@ -102,6 +105,12 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
       await emit('note-updated', { noteId });
       setShowNoteColorPicker(false);
     }
+  };
+
+  const handleOpacityChange = async (value: number) => {
+    setOpacity(value);
+    const window = getCurrentWindow();
+    await window.setOpacity(value);
   };
 
   const handleAddTodo = async () => {
@@ -207,23 +216,6 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={handleToggleAlwaysOnTop}
-              className={cn(
-                'p-1.5 rounded-lg transition-colors',
-                isAlwaysOnTop ? 'bg-primary/15 text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted'
-              )}
-              title={isAlwaysOnTop ? '取消固定' : '固定位置'}
-            >
-              {isAlwaysOnTop ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowNoteColorPicker(!showNoteColorPicker); }}
-              className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted transition-colors"
-              title="更换颜色"
-            >
-              <Palette className="w-4 h-4" />
-            </button>
             <button
               onClick={handleClose}
               className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -346,15 +338,41 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
           )}
         </div>
 
-        {/* 添加任务 */}
-        <div className="px-3 py-2 border-t border-border/30">
+        {/* 添加任务和功能按钮 */}
+        <div className="px-3 py-2 border-t border-border/30 flex items-center justify-between gap-2">
           <button
             onClick={handleAddTodo}
-            className="w-full flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <Plus className="w-4 h-4 shrink-0" />
             <span className="text-sm">添加任务</span>
           </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={handleToggleAlwaysOnTop}
+              className={cn(
+                'p-1.5 rounded-lg transition-colors',
+                isAlwaysOnTop ? 'bg-primary/15 text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted'
+              )}
+              title={isAlwaysOnTop ? '取消固定' : '固定位置'}
+            >
+              {isAlwaysOnTop ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowNoteColorPicker(!showNoteColorPicker); }}
+              className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted transition-colors"
+              title="更换颜色"
+            >
+              <Palette className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowOpacityPicker(!showOpacityPicker); }}
+              className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted transition-colors"
+              title="调节透明度"
+            >
+              <Droplet className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -414,6 +432,28 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
               title={color.name}
             />
           ))}
+        </div>
+      )}
+
+      {/* 透明度调节器 */}
+      {showOpacityPicker && (
+        <div
+          className="fixed top-14 right-4 p-3 bg-popover border border-border rounded-lg shadow-lg z-50 w-48"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-foreground">透明度</span>
+            <span className="text-sm text-muted-foreground">{Math.round(opacity * 100)}%</span>
+          </div>
+          <input
+            type="range"
+            min="0.3"
+            max="1"
+            step="0.05"
+            value={opacity}
+            onChange={(e) => handleOpacityChange(parseFloat(e.target.value))}
+            className="w-full"
+          />
         </div>
       )}
 
