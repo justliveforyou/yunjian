@@ -1,5 +1,5 @@
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from 'lucide-react';
-import { useToastStore, Toast as ToastType } from '@/stores/toastStore';
+import { useToastStore, type Toast as ToastType } from '@/stores/toastStore';
 
 const icons = {
   success: CheckCircle,

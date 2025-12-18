@@ -6,6 +6,7 @@ import App from './App.tsx';
 import { NoteWindowPage } from '@/pages/NoteWindowPage';
 import { CreateNotePage } from '@/pages/CreateNotePage';
 import { initDatabase } from '@/services/database';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // 初始化数据库后再渲染应用
 initDatabase()
@@ -22,13 +23,15 @@ initDatabase()
 function renderApp() {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/note/:noteId" element={<NoteWindowPage />} />
-          <Route path="/create" element={<CreateNotePage />} />
-        </Routes>
-      </BrowserRouter>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<App />} />
+            <Route path="/note/:noteId" element={<NoteWindowPage />} />
+            <Route path="/create" element={<CreateNotePage />} />
+          </Routes>
+        </BrowserRouter>
+      </ErrorBoundary>
     </StrictMode>
   );
 }
