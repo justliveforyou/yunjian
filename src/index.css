@@ -152,6 +152,31 @@
   height: 0 !important;
 }
 
+/* 强制显示滚动条（覆盖隐藏规则） */
+.scrollbar-visible {
+  scrollbar-width: thin !important;
+  -ms-overflow-style: auto !important;
+}
+
+.scrollbar-visible::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.scrollbar-visible::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0.01 85) !important;
+  border-radius: 3px !important;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.6 0.01 85) !important;
+}
+
 /* 禁用文本选择 */
 .no-select {
   user-select: none;

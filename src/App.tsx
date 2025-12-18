@@ -86,6 +86,14 @@ export default function App() {
     return () => { unlisten.then(fn => fn()); };
   }, [loadTodosByNoteId]);
 
+  // 监听桌面卡片的便签更新事件（标题、颜色等）
+  useEffect(() => {
+    const unlisten = listen('note-updated', () => {
+      loadNotes();
+    });
+    return () => { unlisten.then(fn => fn()); };
+  }, [loadNotes]);
+
   // 监听托盘新建项目事件
   useEffect(() => {
     const unlisten = listen('tray-new-project', () => {

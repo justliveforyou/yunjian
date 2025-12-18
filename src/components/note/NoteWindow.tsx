@@ -9,7 +9,7 @@ import { ICON_MAP, TASK_COLORS, DEFAULT_PROJECT_COLORS, DEFAULT_TODO_COLORS, DEF
 import { ConfirmModal } from '@/components/modal';
 import { cn } from '@/utils';
 import { getNoteById as getNoteFromDb, updateNote as updateNoteInDb, getTodosByNoteId } from '@/services/database';
-import type { Note, TodoItem, TodoStatus, TodoColor } from '@/types';
+import type { Note, NoteColor, TodoItem, TodoStatus, TodoColor } from '@/types';
 
 interface NoteWindowProps {
   noteId: string;
@@ -27,10 +27,10 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
   const [statusPickerPos, setStatusPickerPos] = useState({ x: 0, y: 0 });
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingTodoValue, setEditingTodoValue] = useState('');
-  const [newTodoContent, setNewTodoContent] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const [deleteTodoConfirm, setDeleteTodoConfirm] = useState<string | null>(null);
+  const [showNoteColorPicker, setShowNoteColorPicker] = useState(false);
 
   const { addTodo, updateTodo, deleteTodo } = useTodoStore();
   const { settings } = useSettingsStore();
@@ -61,6 +61,7 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     const handleClickOutside = () => {
       setOpenStatusPicker(null);
       setShowColorPicker(null);
+      setShowNoteColorPicker(false);
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
@@ -90,32 +91,45 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     if (note) {
       setNote({ ...note, title });
       await updateNoteInDb(note.id, { title });
+      await emit('note-updated', { noteId });
+    }
+  };
+
+  const handleUpdateNoteColor = async (color: NoteColor) => {
+    if (note) {
+      setNote({ ...note, color });
+      await updateNoteInDb(note.id, { color });
+      await emit('note-updated', { noteId });
+      setShowNoteColorPicker(false);
     }
   };
 
   const handleAddTodo = async () => {
-    if (newTodoContent.trim()) {
-      const newTodo = await addTodo({ noteId, content: newTodoContent.trim() });
-      setTodos(prev => [...prev, newTodo]);
-      setNewTodoContent('');
-    }
+    const newTodo = await addTodo({ noteId, content: '' });
+    setTodos(prev => [...prev, newTodo]);
+    setEditingTodoId(newTodo.id);
+    setEditingTodoValue('');
+    await emit('todo-changed', { noteId });
   };
 
   const handleUpdateTodoStatus = async (todoId: string, status: TodoStatus) => {
     await updateTodo(todoId, noteId, { status });
     setTodos(prev => prev.map(t => t.id === todoId ? { ...t, status } : t));
     setOpenStatusPicker(null);
+    await emit('todo-changed', { noteId });
   };
 
   const handleUpdateTodoContent = async (todoId: string, content: string) => {
     await updateTodo(todoId, noteId, { content });
     setTodos(prev => prev.map(t => t.id === todoId ? { ...t, content } : t));
+    await emit('todo-changed', { noteId });
   };
 
   const handleUpdateTodoColor = async (todoId: string, color: TodoColor) => {
     await updateTodo(todoId, noteId, { color });
     setTodos(prev => prev.map(t => t.id === todoId ? { ...t, color } : t));
     setShowColorPicker(null);
+    await emit('todo-changed', { noteId });
   };
 
   const handleDeleteTodo = async (todoId: string) => {
@@ -204,6 +218,13 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
               {isAlwaysOnTop ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
             </button>
             <button
+              onClick={(e) => { e.stopPropagation(); setShowNoteColorPicker(!showNoteColorPicker); }}
+              className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted transition-colors"
+              title="更换颜色"
+            >
+              <Palette className="w-4 h-4" />
+            </button>
+            <button
               onClick={handleClose}
               className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
             >
@@ -225,7 +246,7 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
         </div>
 
         {/* 任务列表 */}
-        <div className="flex-1 overflow-y-auto px-2 py-2 scrollbar-hidden">
+        <div className="flex-1 overflow-y-scroll px-2 py-2 scrollbar-visible">
           {totalCount === 0 ? (
             <div className="py-6 text-center">
               <p className="text-sm text-muted-foreground">暂无任务</p>
@@ -327,17 +348,13 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
 
         {/* 添加任务 */}
         <div className="px-3 py-2 border-t border-border/30">
-          <div className="flex items-center gap-2">
-            <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
-            <input
-              type="text"
-              placeholder="添加新任务..."
-              value={newTodoContent}
-              onChange={(e) => setNewTodoContent(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
-              className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground"
-            />
-          </div>
+          <button
+            onClick={handleAddTodo}
+            className="w-full flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="text-sm">添加任务</span>
+          </button>
         </div>
       </div>
 
@@ -377,6 +394,24 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
               onClick={() => handleUpdateTodoColor(showColorPicker, color.id as TodoColor)}
               className={cn('w-6 h-6 rounded-full border-2 transition-all', 'border-transparent hover:scale-110')}
               style={{ backgroundColor: color.id === 'none' ? '#e5e5e5' : color.bg }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* 便签颜色选择器 */}
+      {showNoteColorPicker && (
+        <div
+          className="fixed top-14 right-4 p-2 bg-popover border border-border rounded-lg shadow-lg z-50 flex flex-wrap gap-1.5 w-40"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {projectColors.map((color) => (
+            <button
+              key={color.id}
+              onClick={() => handleUpdateNoteColor(color.id as NoteColor)}
+              className={cn('w-7 h-7 rounded-full border-2 transition-all', note?.color === color.id ? 'border-foreground scale-110' : 'border-transparent hover:scale-105')}
+              style={{ backgroundColor: color.bg }}
+              title={color.name}
             />
           ))}
         </div>
