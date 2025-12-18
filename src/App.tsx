@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useNoteStore, useTagStore, useTodoStore, useSettingsStore } from '@/stores';
+import { ToastContainer } from '@/components/ui/Toast';
 import { Sidebar, Header } from '@/components/layout';
 import { EditPanel, ProjectCard } from '@/components/note';
 import { CreateNoteModal, SettingsModal, ConfirmModal } from '@/components/modal';
@@ -299,6 +300,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <ToastContainer />
     </div>
   );
 }
