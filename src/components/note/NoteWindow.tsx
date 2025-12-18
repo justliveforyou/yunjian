@@ -107,10 +107,8 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     }
   };
 
-  const handleOpacityChange = async (value: number) => {
+  const handleOpacityChange = (value: number) => {
     setOpacity(value);
-    const window = getCurrentWindow();
-    await window.setOpacity(value);
   };
 
   const handleAddTodo = async () => {
@@ -187,7 +185,7 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     <div className="h-screen bg-transparent overflow-visible">
       <div
         className={cn('h-full flex flex-col rounded-2xl transition-all duration-200 overflow-hidden', isDragging && 'scale-[1.02]')}
-        style={{ backgroundColor: bgColor }}
+        style={{ backgroundColor: bgColor, opacity }}
       >
         {/* 头部 */}
         <div
@@ -420,7 +418,7 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
       {/* 便签颜色选择器 */}
       {showNoteColorPicker && (
         <div
-          className="fixed top-14 right-4 p-2 bg-popover border border-border rounded-lg shadow-lg z-50 flex flex-wrap gap-1.5 w-40"
+          className="fixed bottom-14 right-4 p-2 bg-popover border border-border rounded-lg shadow-lg z-50 flex flex-wrap gap-1.5 w-40"
           onClick={(e) => e.stopPropagation()}
         >
           {projectColors.map((color) => (
@@ -438,7 +436,7 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
       {/* 透明度调节器 */}
       {showOpacityPicker && (
         <div
-          className="fixed top-14 right-4 p-3 bg-popover border border-border rounded-lg shadow-lg z-50 w-48"
+          className="fixed bottom-14 right-4 p-3 bg-popover border border-border rounded-lg shadow-lg z-50 w-48"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-2">
