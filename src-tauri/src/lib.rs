@@ -94,6 +94,9 @@ pub fn run() {
             Some(vec!["--flag1", "--flag2"]),
         ))
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             create_note_window,
             close_note_window,

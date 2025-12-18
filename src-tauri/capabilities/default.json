@@ -37,6 +37,9 @@
     "store:allow-get",
     "store:allow-set",
     "store:allow-delete",
-    "store:allow-save"
+    "store:allow-save",
+    "shell:allow-open",
+    "updater:default",
+    "process:allow-restart"
   ]
 }
