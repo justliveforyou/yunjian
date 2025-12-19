@@ -481,3 +481,17 @@ export async function deleteWindowState(noteId: string): Promise<void> {
   const database = await getDatabase();
   await database.execute('DELETE FROM window_states WHERE note_id = ?', [noteId]);
 }
+
+export async function getAllWindowStates(): Promise<NoteWindow[]> {
+  const database = await getDatabase();
+  const rows = await database.select<WindowStateRow[]>('SELECT * FROM window_states');
+
+  return rows.map(row => ({
+    noteId: row.note_id,
+    windowLabel: `note-${row.note_id}`,
+    position: { x: row.x, y: row.y },
+    size: { width: row.width, height: row.height },
+    isAlwaysOnTop: row.is_always_on_top === 1,
+    opacity: row.opacity,
+  }));
+}

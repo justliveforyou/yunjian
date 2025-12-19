@@ -1,6 +1,6 @@
 [package]
 name = "yunjian"
-version = "0.3.3"
+version = "0.3.5"
 description = "云笺 - 跨平台便签应用"
 authors = ["you"]
 license = "MIT"

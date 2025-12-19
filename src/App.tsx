@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 import { useNoteStore, useTagStore, useTodoStore, useSettingsStore } from '@/stores';
 import { ToastContainer } from '@/components/ui/Toast';
 import { Sidebar, Header } from '@/components/layout';
@@ -9,6 +9,8 @@ import { CreateNoteModal, SettingsModal, ConfirmModal } from '@/components/modal
 import { DEFAULT_PROJECT_COLORS } from '@/constants';
 import type { Note, NoteColor } from '@/types';
 import { cn } from '@/utils';
+import { getAllWindowStates, deleteWindowState } from '@/services/database';
+import { createOrRestoreWindow } from '@/services/windowManager';
 
 type ViewMode = 'all' | 'tag' | 'trash';
 
@@ -44,6 +46,36 @@ export default function App() {
     // 初始化关闭到托盘设置
     invoke('set_close_to_tray', { enabled: settings.closeToTray }).catch(console.error);
   }, [loadNotes, loadTags]);
+
+  // 应用启动时恢复窗口
+  useEffect(() => {
+    const restoreWindows = async () => {
+      try {
+        // 获取所有保存的窗口状态
+        const windowStates = await getAllWindowStates();
+
+        // 验证便签是否存在并恢复窗口
+        for (const state of windowStates) {
+          const note = notes.find(n => n.id === state.noteId);
+
+          if (note && note.status === 'active') {
+            // 恢复窗口
+            await createOrRestoreWindow(state.noteId, note.title, note.color);
+          } else {
+            // 便签已删除，清理窗口状态
+            await deleteWindowState(state.noteId);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to restore windows:', err);
+      }
+    };
+
+    // 在数据加载完成后恢复窗口
+    if (notes.length > 0) {
+      restoreWindows();
+    }
+  }, [notes]);
 
   // 应用主题
   useEffect(() => {
@@ -162,7 +194,7 @@ export default function App() {
 
   const handlePopOut = async (note: Note) => {
     try {
-      await invoke('create_note_window', { noteId: note.id, title: note.title || '便签', color: note.color });
+      await createOrRestoreWindow(note.id, note.title || '便签', note.color);
     } catch (err) {
       console.error('Failed to create note window:', err);
     }
@@ -205,13 +237,13 @@ export default function App() {
                     editingTodoValue={editingTodoValue}
                     onToggleExpand={() => setExpandedProjects(prev => ({ ...prev, [note.id]: !prev[note.id] }))}
                     onPopOut={() => handlePopOut(note)}
-                    onTogglePin={() => updateNote(note.id, { isPinned: !note.isPinned })}
+                    onTogglePin={async () => { updateNote(note.id, { isPinned: !note.isPinned }); await emit('note-updated', { noteId: note.id }); }}
                     onDelete={() => handleDeleteNote(note)}
-                    onUpdateTitle={(title) => updateNote(note.id, { title })}
-                    onUpdateTodoStatus={(todoId, status) => updateTodo(todoId, note.id, { status })}
-                    onUpdateTodoContent={(todoId, content) => updateTodo(todoId, note.id, { content })}
-                    onUpdateTodoColor={(todoId, color) => updateTodo(todoId, note.id, { color })}
-                    onDeleteTodo={(todoId) => deleteTodo(todoId, note.id)}
+                    onUpdateTitle={async (title) => { updateNote(note.id, { title }); await emit('note-updated', { noteId: note.id }); }}
+                    onUpdateTodoStatus={async (todoId, status) => { updateTodo(todoId, note.id, { status }); await emit('todo-changed', { noteId: note.id }); }}
+                    onUpdateTodoContent={async (todoId, content) => { updateTodo(todoId, note.id, { content }); await emit('todo-changed', { noteId: note.id }); }}
+                    onUpdateTodoColor={async (todoId, color) => { updateTodo(todoId, note.id, { color }); await emit('todo-changed', { noteId: note.id }); }}
+                    onDeleteTodo={async (todoId) => { deleteTodo(todoId, note.id); await emit('todo-changed', { noteId: note.id }); }}
                     onContextMenu={(e) => { e.preventDefault(); setContextMenuId(note.id); setContextMenuPos({ x: e.clientX, y: e.clientY }); }}
                     onEditTodo={(todoId, content) => { setEditingTodoId(todoId); setEditingTodoValue(content); }}
                     onCancelEditTodo={() => setEditingTodoId(null)}
@@ -227,14 +259,14 @@ export default function App() {
               todos={currentTodos}
               progress={currentProgress}
               onClose={() => setEditingNote(null)}
-              onUpdateNote={(id, updates) => { updateNote(id, updates); setEditingNote({ ...editingNote, ...updates }); }}
+              onUpdateNote={async (id, updates) => { updateNote(id, updates); setEditingNote({ ...editingNote, ...updates }); await emit('note-updated', { noteId: id }); }}
               onPopOut={handlePopOut}
-              onAddTodo={(content) => addTodo({ noteId: editingNote.id, content })}
-              onToggleStatus={(id) => toggleTodoStatus(id, editingNote.id)}
-              onSetStatus={(id, status) => updateTodo(id, editingNote.id, { status })}
-              onDeleteTodo={(id) => deleteTodo(id, editingNote.id)}
-              onUpdateTodo={(id, content) => updateTodo(id, editingNote.id, { content })}
-              onUpdateTodoColor={(id, color) => updateTodo(id, editingNote.id, { color })}
+              onAddTodo={async (content) => { addTodo({ noteId: editingNote.id, content }); await emit('todo-changed', { noteId: editingNote.id }); }}
+              onToggleStatus={async (id) => { toggleTodoStatus(id, editingNote.id); await emit('todo-changed', { noteId: editingNote.id }); }}
+              onSetStatus={async (id, status) => { updateTodo(id, editingNote.id, { status }); await emit('todo-changed', { noteId: editingNote.id }); }}
+              onDeleteTodo={async (id) => { deleteTodo(id, editingNote.id); await emit('todo-changed', { noteId: editingNote.id }); }}
+              onUpdateTodo={async (id, content) => { updateTodo(id, editingNote.id, { content }); await emit('todo-changed', { noteId: editingNote.id }); }}
+              onUpdateTodoColor={async (id, color) => { updateTodo(id, editingNote.id, { color }); await emit('todo-changed', { noteId: editingNote.id }); }}
             />
           )}
         </div>
@@ -277,6 +309,7 @@ export default function App() {
               const newTodo = await addTodo({ noteId: contextMenuId, content: '' });
               setEditingTodoId(newTodo.id);
               setEditingTodoValue('');
+              await emit('todo-changed', { noteId: contextMenuId });
               setContextMenuId(null);
             }}
             className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent transition-colors"
@@ -297,7 +330,7 @@ export default function App() {
                   return (
                     <button
                       key={color.id}
-                      onClick={() => { updateNote(contextMenuId, { color: color.id as NoteColor }); setShowColorPicker(false); setContextMenuId(null); }}
+                      onClick={async () => { updateNote(contextMenuId, { color: color.id as NoteColor }); await emit('note-updated', { noteId: contextMenuId }); setShowColorPicker(false); setContextMenuId(null); }}
                       className={cn('w-6 h-6 rounded-full border-2 transition-all', note?.color === color.id ? 'border-foreground scale-110' : 'border-transparent hover:scale-105')}
                       style={{ backgroundColor: color.bg }}
                     />

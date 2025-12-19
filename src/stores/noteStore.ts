@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
+import { invoke } from '@tauri-apps/api/core';
 import type { Note, CreateNoteParams, UpdateNoteParams } from '@/types';
 import { nowISO } from '@/utils';
 import * as db from '@/services/database';
@@ -100,12 +101,25 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
     );
   },
 
-  permanentDeleteNote: (id) => {
+  permanentDeleteNote: async (id) => {
+    // 清理窗口状态
+    await db.deleteWindowState(id).catch((err) => console.error('Failed to delete window state:', err));
+
+    // 如果窗口打开，关闭它
+    try {
+      await invoke('close_note_window', { noteId: id });
+    } catch {
+      // 窗口可能未打开，忽略错误
+    }
+
+    // 删除便签
+    await db.deleteNote(id).catch((err) => console.error('Failed to permanently delete note:', err));
+
+    // 更新状态
     set((state) => ({
       notes: state.notes.filter((n) => n.id !== id),
       activeNoteId: state.activeNoteId === id ? null : state.activeNoteId,
     }));
-    db.deleteNote(id).catch((err) => console.error('Failed to permanently delete note:', err));
   },
 
   setActiveNote: (id) => set({ activeNoteId: id }),

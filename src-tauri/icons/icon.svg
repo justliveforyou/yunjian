@@ -1,12 +1,44 @@
 <svg width="512" height="512" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 圆角方形背景 -->
   <rect x="8" y="8" width="104" height="104" rx="22" fill="#22C55E" />
+
+  <!-- 大云朵 - 占满宽度，位于下方 -->
   <path
-    d="M36 50C36 44.477 40.477 40 46 40C47.126 40 48.21 40.168 49.228 40.48C51.486 35.584 56.382 32 62 32C69.18 32 75.078 37.328 75.876 44.26C76.246 44.178 76.618 44.134 77 44.134C81.418 44.134 85 47.716 85 52.134C85 56.552 81.418 60.134 77 60.134H46C40.477 60.134 36 55.657 36 50.134V50Z"
+    d="M18 75C18 65.059 26.059 57 36 57C37.8 57 39.536 57.268 41.164 57.768C44.778 50.022 52.618 45 61.6 45C73.096 45 82.528 53.56 83.808 64.616C84.4 64.486 85.014 64.416 85.646 64.416C92.718 64.416 98.454 70.152 98.454 77.224C98.454 84.296 92.718 90.032 85.646 90.032H36C26.059 90.032 18 81.973 18 72.032V75Z"
     fill="white"
-    opacity="0.9"
+    opacity="0.95"
   />
-  <rect x="38" y="56" width="44" height="38" rx="3" fill="white" opacity="0.95" />
-  <line x1="46" y1="68" x2="74" y2="68" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" opacity="0.5" />
-  <line x1="46" y1="78" x2="68" y2="78" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" opacity="0.35" />
-  <line x1="46" y1="88" x2="62" y2="88" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" opacity="0.2" />
+
+  <!-- 便签 1 - 左侧，小角度倾斜 -->
+  <g transform="translate(22, 18) rotate(-8)">
+    <rect width="14" height="18" rx="2" fill="white" opacity="0.6" />
+    <rect y="0" width="14" height="3" rx="1" fill="#BBF7D0" />
+    <line x1="2.5" y1="8" x2="11" y2="8" stroke="#22C55E" stroke-width="1" stroke-linecap="round" opacity="0.3" />
+    <line x1="2.5" y1="11" x2="9" y2="11" stroke="#22C55E" stroke-width="1" stroke-linecap="round" opacity="0.2" />
+  </g>
+
+  <!-- 便签 2 - 中左，微微倾斜 -->
+  <g transform="translate(40, 24) rotate(-3)">
+    <rect width="18" height="22" rx="2" fill="white" opacity="0.75" />
+    <rect y="0" width="18" height="4" rx="1" fill="#FECACA" />
+    <line x1="3" y1="9" x2="15" y2="9" stroke="#22C55E" stroke-width="1.2" stroke-linecap="round" opacity="0.35" />
+    <line x1="3" y1="13" x2="12" y2="13" stroke="#22C55E" stroke-width="1.2" stroke-linecap="round" opacity="0.25" />
+  </g>
+
+  <!-- 便签 3 - 中间偏右，最大最近云朵 -->
+  <g transform="translate(62, 32) rotate(2)">
+    <rect width="22" height="28" rx="2" fill="white" opacity="0.9" />
+    <rect y="0" width="22" height="5" rx="1.5" fill="#FDE68A" />
+    <line x1="4" y1="11" x2="18" y2="11" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round" opacity="0.4" />
+    <line x1="4" y1="16" x2="15" y2="16" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round" opacity="0.3" />
+    <line x1="4" y1="21" x2="12" y2="21" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round" opacity="0.2" />
+  </g>
+
+  <!-- 便签 4 - 右侧，小角度倾斜 -->
+  <g transform="translate(88, 20) rotate(6)">
+    <rect width="16" height="20" rx="2" fill="white" opacity="0.7" />
+    <rect y="0" width="16" height="4" rx="1" fill="#DDD6FE" />
+    <line x1="3" y1="9" x2="13" y2="9" stroke="#22C55E" stroke-width="1.2" stroke-linecap="round" opacity="0.35" />
+    <line x1="3" y1="13" x2="10" y2="13" stroke="#22C55E" stroke-width="1.2" stroke-linecap="round" opacity="0.2" />
+  </g>
 </svg>

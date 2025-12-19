@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { X, GripVertical, Pin, PinOff, Palette, Circle, Plus, Droplet } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { emit } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useSettingsStore } from '@/stores';
 import { useTodoStore } from '@/stores/todoStore';
 import { ICON_MAP, TASK_COLORS, DEFAULT_PROJECT_COLORS, DEFAULT_TODO_COLORS, DEFAULT_TODO_STATUSES } from '@/constants';
 import { ConfirmModal } from '@/components/modal';
 import { cn } from '@/utils';
-import { getNoteById as getNoteFromDb, updateNote as updateNoteInDb, getTodosByNoteId } from '@/services/database';
+import { getNoteById as getNoteFromDb, updateNote as updateNoteInDb, getTodosByNoteId, getWindowState, saveWindowState } from '@/services/database';
+import { setupWindowStateTracking, debouncedSaveOpacity } from '@/services/windowManager';
 import type { Note, NoteColor, TodoItem, TodoStatus, TodoColor } from '@/types';
 
 interface NoteWindowProps {
@@ -59,6 +60,44 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     loadData();
   }, [noteId]);
 
+  // 监听主窗口的便签更新事件
+  useEffect(() => {
+    const unlisten = listen<{ noteId: string }>('note-updated', async (event) => {
+      // 只处理当前便签的更新
+      if (event.payload.noteId === noteId) {
+        try {
+          const foundNote = await getNoteFromDb(noteId);
+          if (foundNote) setNote(foundNote);
+        } catch (err) {
+          console.error('Failed to reload note:', err);
+        }
+      }
+    });
+    return () => { unlisten.then(fn => fn()); };
+  }, [noteId]);
+
+  // 监听主窗口的 todo 变更事件
+  useEffect(() => {
+    const unlisten = listen<{ noteId: string }>('todo-changed', async (event) => {
+      // 只处理当前便签的 todo 更新
+      if (event.payload.noteId === noteId) {
+        try {
+          const foundTodos = await getTodosByNoteId(noteId);
+          setTodos(foundTodos);
+        } catch (err) {
+          console.error('Failed to reload todos:', err);
+        }
+      }
+    });
+    return () => { unlisten.then(fn => fn()); };
+  }, [noteId]);
+
+  // 设置窗口状态跟踪（只在 noteId 变化时重新设置）
+  useEffect(() => {
+    const cleanup = setupWindowStateTracking(noteId, opacity);
+    return () => { cleanup.then(fn => fn()); };
+  }, [noteId]); // 移除 opacity 依赖，避免频繁重新设置监听器
+
   useEffect(() => {
     const handleClickOutside = () => {
       setOpenStatusPicker(null);
@@ -71,6 +110,22 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
   }, []);
 
   const handleClose = async () => {
+    // 保存最终状态
+    try {
+      const currentState = await invoke<{ x: number; y: number; width: number; height: number; always_on_top: boolean }>('get_window_state', { noteId });
+      await saveWindowState({
+        noteId,
+        windowLabel: `note-${noteId}`,
+        position: { x: currentState.x, y: currentState.y },
+        size: { width: currentState.width, height: currentState.height },
+        isAlwaysOnTop,
+        opacity,
+      });
+    } catch (err) {
+      console.error('Failed to save window state:', err);
+    }
+
+    // 关闭窗口
     try {
       await invoke('close_note_window', { noteId });
     } catch {
@@ -84,6 +139,13 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     setIsAlwaysOnTop(newValue);
     try {
       await invoke('set_window_always_on_top', { noteId, alwaysOnTop: newValue });
+
+      // 立即保存到数据库
+      const state = await getWindowState(noteId);
+      if (state) {
+        state.isAlwaysOnTop = newValue;
+        await saveWindowState(state);
+      }
     } catch {
       const window = getCurrentWindow();
       await window.setAlwaysOnTop(newValue);
@@ -107,8 +169,18 @@ export function NoteWindow({ noteId }: NoteWindowProps) {
     }
   };
 
-  const handleOpacityChange = (value: number) => {
+  const handleOpacityChange = async (value: number) => {
     setOpacity(value);
+
+    // 设置 Rust 窗口透明度
+    try {
+      await invoke('set_window_opacity', { noteId, opacity: value });
+    } catch (err) {
+      console.error('Failed to set window opacity:', err);
+    }
+
+    // 保存到数据库（防抖）
+    debouncedSaveOpacity(noteId, value);
   };
 
   const handleAddTodo = async () => {
